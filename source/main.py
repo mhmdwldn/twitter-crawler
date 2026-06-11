@@ -77,6 +77,26 @@ if __name__ == "__main__":
     argp_crawler.add_argument("--elasticsearch-hosts", dest="elasticsearch_hosts_crawler", type=str, default=None,
                               help="ES host URL")
 
+    # --- Subcommand: consumer (Kafka -> Elasticsearch) ---
+    argp_consumer = argp_sub.add_parser(
+        "consumer", help="Consume tweets from Kafka and index them into Elasticsearch"
+    )
+    argp_consumer.add_argument("--topic", dest="topic", type=str, default=None,
+                               help="Source Kafka topic (default: config kafka.topic)")
+    argp_consumer.add_argument("--index", dest="index", type=str, default=None,
+                               help="Target ES index (default: config elasticsearch.index_name)")
+    argp_consumer.add_argument("--group-id", dest="group_id", type=str, default="twitter-es-indexer",
+                               help="Kafka consumer group ID")
+    argp_consumer.add_argument("--bootstrap-servers", dest="bootstrap_servers_consumer", type=str, default=None,
+                               help="Kafka broker list")
+    argp_consumer.add_argument("--elasticsearch-hosts", dest="elasticsearch_hosts_consumer", type=str, default=None,
+                               help="ES host URL")
+    argp_consumer.add_argument("--max-messages", dest="max_messages", type=int, default=None,
+                               help="Stop after indexing this many messages (default: run until idle/forever)")
+    argp_consumer.add_argument("--idle-timeout", dest="idle_timeout", type=float, default=0.0,
+                               help="Stop after N seconds with no new messages (0 = run forever)")
+    argp_consumer.add_argument("--log-level", dest="log_level", type=str, default="INFO")
+
     args = argp.parse_args()
 
     # Merge: crawler subparser values take precedence over parent parser defaults
@@ -86,6 +106,11 @@ if __name__ == "__main__":
         args.elasticsearch_hosts = args.elasticsearch_hosts_crawler
     if getattr(args, "destination_crawler", None):
         args.destination = args.destination_crawler
+    # Same merge for the consumer subparser
+    if getattr(args, "bootstrap_servers_consumer", None):
+        args.bootstrap_servers = args.bootstrap_servers_consumer
+    if getattr(args, "elasticsearch_hosts_consumer", None):
+        args.elasticsearch_hosts = args.elasticsearch_hosts_consumer
 
     # --- Setup logging ---
     log_level = getattr(args, "log_level", "INFO")
@@ -96,9 +121,29 @@ if __name__ == "__main__":
     )
     log = logging.getLogger("main")
 
-    if args.which != "crawler":
+    if args.which not in ("crawler", "consumer"):
         argp.print_help()
         sys.exit(1)
+
+    # ================================================================
+    # Subcommand: consumer (Kafka -> Elasticsearch)
+    # ================================================================
+    if args.which == "consumer":
+        from library.consumer import run_kafka_to_elasticsearch
+
+        indexed = asyncio.run(
+            run_kafka_to_elasticsearch(
+                topic=args.topic,
+                index=args.index,
+                bootstrap_servers=args.bootstrap_servers,
+                elasticsearch_hosts=args.elasticsearch_hosts,
+                group_id=args.group_id,
+                max_messages=args.max_messages,
+                idle_timeout=args.idle_timeout,
+            )
+        )
+        log.info("Consumer finished — indexed %d message(s)", indexed)
+        sys.exit(0)
 
     from controllers.twitter.search_tweets import TwitterSearchTweets
 

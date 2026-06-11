@@ -22,10 +22,16 @@ alerts on crawl start/finish/failure.
 
 ### Operation Modes
 
-| Mode | `--type` | Description |
-|------|----------|-------------|
-| `scrape` | `search` | Search by query → JSON to stdout or file |
-| `full` | `search` | Crawl + publish to an output driver (Kafka/ES/file/std) |
+| Command | Mode | Description |
+|---------|------|-------------|
+| `crawler` | `scrape` | Search by query → JSON to stdout or file |
+| `crawler` | `full` | Crawl + publish to an output driver (Kafka/ES/file/std) |
+| `consumer` | — | Read tweets from Kafka and index them into Elasticsearch |
+
+The end-to-end chain is: **scrape → produce to Kafka (`crawler --mode full -d kafka`)
+→ consume from Kafka → index to Elasticsearch (`consumer`)**. The crawler can
+also write straight to Elasticsearch (`crawler --mode full -d elasticsearch`)
+when you don't need Kafka in the middle.
 
 ### Design Principles
 
@@ -113,12 +119,43 @@ python main.py crawler --mode scrape --query "openclaw" --since 2026-01-01 --unt
 # Full pipeline -> Kafka
 python main.py crawler --mode full --query "openclaw" -d kafka -o twitter.tweets.raw --bootstrap-servers localhost:9092
 
-# Full pipeline -> Elasticsearch
+# Full pipeline -> Elasticsearch (direct, no Kafka)
 python main.py crawler --mode full --query "openclaw" -d elasticsearch -o twitter_tweets --elasticsearch-hosts http://localhost:9200
 
 # Custom mirrors
 python main.py crawler --mode scrape --query "openclaw" --mirrors https://nitter.net https://nitter.tiekoetter.com
 ```
+
+### End-to-end: scrape → Kafka → Elasticsearch
+
+```bash
+cd source
+
+# 0. Auto-create the Kafka topic + ES index with mappings
+python library/setup_infra.py
+
+# 1. Scrape and produce to Kafka
+python main.py crawler --mode full --query "openclaw" --target 50 --max-pages 4 \
+  -d kafka -o twitter.tweets.raw --bootstrap-servers localhost:9092
+
+# 2. Consume from Kafka and index into Elasticsearch
+#    --idle-timeout 8 drains the topic then exits; drop it to run forever
+python main.py consumer --topic twitter.tweets.raw --index twitter_tweets \
+  --bootstrap-servers localhost:9092 --elasticsearch-hosts http://localhost:9200 \
+  --idle-timeout 8
+
+# 3. Verify
+curl 'http://localhost:9200/twitter_tweets/_count'
+curl 'http://localhost:9200/twitter_tweets/_search?q=content:openclaw&size=3'
+```
+
+Documents use `tweet_id` as the Elasticsearch `_id`, so re-running the
+consumer upserts rather than duplicating.
+
+> **Elasticsearch version note:** the Python client major version must match
+> your server. This project pins `elasticsearch>=8.12,<9` for an ES 8.x
+> cluster — a v9 client against an 8.x server fails with a media-type/Accept
+> version 400 error.
 
 ---
 

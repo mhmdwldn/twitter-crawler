@@ -18,6 +18,12 @@ import argparse
 import asyncio
 import logging
 import sys
+from pathlib import Path
+
+# Allow running both as a module (``python -m library.setup_infra``) and as a
+# bare script (``python library/setup_infra.py``) from the source/ directory.
+if __package__ in (None, ""):
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import httpx
 from aiokafka.admin import AIOKafkaAdminClient, NewTopic

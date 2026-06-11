@@ -40,8 +40,8 @@ instead of sync-with-background-threads.
 | Validation       | Pydantic v2 (`BaseModel`)            | `Tweet`, `TweetSearchRequest`, `KafkaEvent` data contracts |
 | HTTP client      | `httpx` (async)                      | Mirror fetching, Anubis solve, Telegram alerts |
 | HTML parsing     | `beautifulsoup4`                     | Tweet extraction from search pages |
-| Message queue    | `aiokafka`                           | `AIOKafkaProducer` output driver + admin in `setup_infra.py` |
-| Search / storage | `elasticsearch` (async client)       | `AsyncElasticsearch` output driver |
+| Message queue    | `aiokafka`                           | `AIOKafkaProducer` output driver + `AIOKafkaConsumer` (Kafka→ES) + admin in `setup_infra.py` |
+| Search / storage | `elasticsearch[async]` (pinned `<9`) | `AsyncElasticsearch` output driver (needs `aiohttp`; client major must match the ES server, so pinned to 8.x for an ES 8.x cluster) |
 | Testing          | `pytest` + `pytest-asyncio` + `pytest-mock` | Fully mocked, no live services |
 
 ## Project Structure
@@ -91,6 +91,7 @@ twitter-crawler/
     │   ├── schemas.py                 # Tweet, TweetSearchRequest, KafkaEvent (Pydantic v2)
     │   ├── twitter_api.py             # TwitterAPI client + parse_search_page + Anubis solver
     │   ├── notifier.py                # TelegramNotifier (async, best-effort)
+    │   ├── consumer.py                # KafkaSinkConsumer + run_kafka_to_elasticsearch
     │   └── setup_infra.py             # Create Kafka topic + ES index (async, CLI script)
     ├── deployment/
     │   ├── compose.yaml               # Local Kafka + ES + Kibana
@@ -137,7 +138,16 @@ cd source
 python main.py crawler --mode scrape --query "openclaw bug" --target 20 --pretty
 python main.py crawler --mode full --query "openclaw" -d kafka -o twitter.tweets.raw
 python main.py crawler --mode full --query "openclaw" -d elasticsearch -o twitter_tweets
+
+# End-to-end through Kafka: produce, then consume into Elasticsearch
+python main.py crawler --mode full --query "openclaw" -d kafka -o twitter.tweets.raw
+python main.py consumer --topic twitter.tweets.raw --index twitter_tweets --idle-timeout 8
 ```
+
+The `consumer` subcommand reads `library/consumer.py`'s `KafkaSinkConsumer`,
+which forwards each Kafka message to an injected output sink (the ES driver by
+default). `--idle-timeout N` drains the topic then exits; omit it to run
+forever. Docs are upserted by `tweet_id`, so reprocessing never duplicates.
 
 Env configuration: export `TWITTER_*` variables (see reference below) or
 edit `config.yaml`. Secrets go in env vars only.
