@@ -1,0 +1,57 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: smart-crawler
+    kind: twitter-crawler
+    platform: twitter
+    type: search-tweets
+  name: sc-twitter-crawler-search-tweets
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: smart-crawler
+      kind: twitter-crawler
+      platform: twitter
+      type: search-tweets
+  template:
+    metadata:
+      labels:
+        app: smart-crawler
+        kind: twitter-crawler
+        platform: twitter
+        type: search-tweets
+    spec:
+      containers:
+      - name: sc-twitter-crawler-search-tweets
+        image: registry.example.internal/smart-crawler/twitter-crawler
+        args:
+          - 'crawler'
+          - '--mode=full'
+          - '--query=openclaw (problem OR issue OR bug OR error)'
+          - '-d=kafka'
+          - '-o=twitter.tweets.raw'
+        env:
+          # Secrets injected from a Kubernetes Secret — never baked into the image
+          - name: TWITTER_TELEGRAM__BOT_TOKEN
+            valueFrom:
+              secretKeyRef:
+                name: twitter-crawler-secrets
+                key: telegram-bot-token
+                optional: true
+          - name: TWITTER_TELEGRAM__CHAT_ID
+            valueFrom:
+              secretKeyRef:
+                name: twitter-crawler-secrets
+                key: telegram-chat-id
+                optional: true
+        imagePullPolicy: Always
+        volumeMounts:
+        - mountPath: /app/../config.yaml
+          name: config
+          subPath: config.yaml
+      volumes:
+      - configMap:
+          name: config-twitter-crawler
+        name: config

@@ -1,0 +1,40 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: config-twitter-crawler
+data:
+  config.yaml: |
+    twitter_crawler:
+
+      environment: production
+      log_level: INFO
+
+      kafka:
+        bootstrap_servers: kafka01.example.internal:9092,kafka02.example.internal:9092
+        topic: twitter.tweets.raw
+        client_id: twitter-crawler
+        acks: all
+        compression_type: gzip
+        max_request_size: 1048576
+        linger_ms: 10
+        request_timeout_ms: 30000
+
+      elasticsearch:
+        hosts:
+          - http://elasticsearch.example.internal:9200
+        index_name: twitter_tweets
+        request_timeout: 30
+        max_retries: 3
+
+      crawler:
+        mirrors:
+          - https://nitter.privacyredirect.com
+          - https://nitter.net
+          - https://nitter.tiekoetter.com
+        search_path: /search
+        default_target_count: 100
+        max_mirror_rotations: 3
+        request_timeout: 45.0
+        max_retries: 4
+        retry_backoff: 2.0
+        rate_limit_rps: 2.0

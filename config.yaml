@@ -1,0 +1,58 @@
+# ============================================================================
+# Twitter Crawler — sample YAML configuration
+# ============================================================================
+# Settings are also overridable via TWITTER_* env vars (see source/library/config.py).
+# Secrets (Telegram bot token, ES credentials) must come from env vars only —
+# never commit them to this file.
+# ============================================================================
+
+twitter_crawler:
+
+  environment: development
+  log_level: INFO
+
+  kafka:
+    bootstrap_servers: localhost:9092
+    topic: twitter.tweets.raw
+    client_id: twitter-crawler
+    acks: all
+    compression_type: gzip
+    max_request_size: 1048576
+    linger_ms: 10
+    request_timeout_ms: 30000
+
+  elasticsearch:
+    hosts:
+      - http://localhost:9200
+    index_name: twitter_tweets
+    # api_key: set via TWITTER_ELASTICSEARCH__API_KEY env var
+    # username / password: set via TWITTER_ELASTICSEARCH__USERNAME / __PASSWORD
+    request_timeout: 30
+    max_retries: 3
+
+  telegram:
+    api_base_url: https://api.telegram.org
+    # bot_token: set via TWITTER_TELEGRAM__BOT_TOKEN env var (secret)
+    # chat_id:   set via TWITTER_TELEGRAM__CHAT_ID env var
+    request_timeout: 30.0
+
+  crawler:
+    mirrors:
+      - https://nitter.privacyredirect.com
+      - https://nitter.net
+      - https://nitter.tiekoetter.com
+    search_path: /search
+    default_query: ""
+    default_target_count: 100
+    max_mirror_rotations: 3
+    request_timeout: 45.0
+    max_retries: 4
+    retry_backoff: 2.0
+    rate_limit_rps: 2.0
+    accept_language: en-US,en;q=0.9,id;q=0.8
+    # proxy_url: http://user:pass@proxy.example.com:8080
+    # Keep in sync with the sec-ch-ua fingerprint in library/twitter_api.py
+    user_agent: >-
+      Mozilla/5.0 (Windows NT 10.0; Win64; x64)
+      AppleWebKit/537.36 (KHTML, like Gecko)
+      Chrome/149.0.0.0 Safari/537.36

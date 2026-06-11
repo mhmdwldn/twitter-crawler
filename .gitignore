@@ -216,3 +216,25 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# ============================================================================
+# Project-specific — Twitter crawler
+# ============================================================================
+
+# Runtime outputs (generated crawl data)
+output/
+results.json
+results_*.json
+crawl_*/
+*.jsonl
+
+# Local config overrides (the committed config.yaml holds no secrets)
+*.local.yaml
+.env.local
+
+# Docker
+docker-compose.override.yml
+*.pid
+
+# Claude Code / AI tooling state
+.claude/
